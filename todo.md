@@ -1,0 +1,7 @@
+- [x] 查看`nvcc` 
+  - 啊我测怎么是11.8，下次尝试 `print("CUDA版本:", torch.version.cuda)`
+- [x] 安装 flashinfer
+- [x] 使用 sampling_params 
+- [ ] 阅读 gpro 示例
+- [x] 清理系统盘 (大败而归)
+- [x] 尝试进行推理
