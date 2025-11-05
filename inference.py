@@ -13,7 +13,7 @@ def print_outputs(outputs):
         print("-" * 80)
 
 
-def load_data(seed: int | None, n_sample: int = -1) -> pd.DataFrame:
+def load_data(test_name: str, seed: int | None, n_sample: int = -1) -> pd.DataFrame:
     """导入并且简单处理数据
 
     Args:
@@ -22,8 +22,18 @@ def load_data(seed: int | None, n_sample: int = -1) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 处理后的数据集
     """
-    with open("./data/preprocessed/laptops_base_google-flan-t5-base.pkl", "rb") as f:
-        data = pickle.load(f)
+    if test_name == "laptop":
+        with open(
+            "./data/preprocessed/laptops_base_google-flan-t5-base.pkl", "rb"
+        ) as f:
+            data = pickle.load(f)
+    elif test_name == "restaurant":
+        with open(
+            "./data/preprocessed/restaurants_base_google-flan-t5-base.pkl", "rb"
+        ) as f:
+            data = pickle.load(f)
+    else:
+        raise ValueError("test_name must be 'laptop' or 'restaurant'")
     data = pd.DataFrame(data)
     data.columns = ["sentence", "object", "sentiment", "is implicit"]
     if n_sample != -1:
@@ -69,7 +79,7 @@ def gather_outputs(index_list: pd.Index, output_list: list):
     return pd.DataFrame(data)
 
 
-def main(n_sample: int, n_try: int):
+def main(test_name: str, n_sample: int, n_try: int):
     from vllm import LLM  # type: ignore
 
     llm = LLM(
@@ -83,9 +93,9 @@ def main(n_sample: int, n_try: int):
     sampling_params.n = n_try
     sampling_params.temperature = 1
     sampling_params.top_p = 0.9
-    sampling_params.max_tokens = 350
+    sampling_params.max_tokens = 1024
 
-    data = load_data(seed=42, n_sample=n_sample)
+    data = load_data(test_name, seed=42, n_sample=n_sample)
     input_conversations = make_conversation_list(data)
 
     outputs = llm.chat(input_conversations, sampling_params, use_tqdm=True)
@@ -99,6 +109,7 @@ def main(n_sample: int, n_try: int):
 if __name__ == "__main__":
     # inference config
     n_sample = -1
-    n_try = 8
+    n_try = 128
+    test_name = "restaurant"
 
-    main(n_sample, n_try)
+    main(test_name, n_sample, n_try)
