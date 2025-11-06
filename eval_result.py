@@ -1,35 +1,28 @@
 import pandas as pd
 
-from inference import load_data
+from datasets import load_from_disk
 
 
-def main(test_name: str):
-    ground_truth = load_data(test_name, seed=None, n_sample=-1)
-    output_data = pd.read_parquet(f"./data/output/{test_name}_test.parquet")
+def main():
+    ground_truth: pd.DataFrame = load_from_disk("./data/laptop_test").to_pandas()  # type: ignore
+    output_data = pd.read_parquet(f"./eval/laptop_test.parquet")
 
     # 数据验证
-    print(ground_truth.shape)
-    print(output_data.shape)
-    print(ground_truth.iloc[0])
-    print(output_data.iloc[0])
+    print(ground_truth.shape, ground_truth.columns)
+    print(output_data.shape, output_data.columns)
 
     if ground_truth.shape[0] * 128 != output_data.shape[0]:
         print("items do not match")
         return
 
-    # 预定义映射字典
-    ans_to_num = {"positive": 0, "negative": 1, "neutral": 2}
-
-    # 向量化处理输出数据
+    # 处理输出数据
     outputs = output_data["output"].str.split().str[-1]
-    mapped_outputs = outputs.map(ans_to_num)
 
     # 计算统计量
-    total = len(output_data)
-    wrong_format = mapped_outputs.isna().sum()
+    total = output_data.shape[0]
+    wrong_format = total - outputs.isin(["positive", "negative", "neutral"]).sum()
     correct = (
-        (mapped_outputs == ground_truth.loc[output_data["index"], "sentiment"].values)
-        & mapped_outputs.notna()
+        outputs == ground_truth.loc[output_data["index"], "sentiment"].values
     ).sum()
 
     print(f"{correct = }, {wrong_format = }, {total = }")
@@ -37,7 +30,4 @@ def main(test_name: str):
 
 
 if __name__ == "__main__":
-    test_list = ["restaurant", "laptop"]
-    test_name = test_list[1]
-
-    main(test_name)
+    main()

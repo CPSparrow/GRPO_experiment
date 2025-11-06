@@ -13,7 +13,7 @@ def print_outputs(outputs):
         print("-" * 80)
 
 
-def load_data(test_name: str, seed: int | None, n_sample: int = -1) -> pd.DataFrame:
+def load_data(test_name: str) -> pd.DataFrame:
     """导入并且简单处理数据
 
     Args:
@@ -36,8 +36,6 @@ def load_data(test_name: str, seed: int | None, n_sample: int = -1) -> pd.DataFr
         raise ValueError("test_name must be 'laptop' or 'restaurant'")
     data = pd.DataFrame(data)
     data.columns = ["sentence", "object", "sentiment", "is implicit"]
-    if n_sample != -1:
-        data = data.sample(n_sample, random_state=seed)
     data = data.sort_index()
     return data
 
@@ -79,7 +77,7 @@ def gather_outputs(index_list: pd.Index, output_list: list):
     return pd.DataFrame(data)
 
 
-def main(test_name: str, n_sample: int, n_try: int):
+def main(test_name: str, n_try: int):
     from vllm import LLM  # type: ignore
 
     llm = LLM(
@@ -95,7 +93,7 @@ def main(test_name: str, n_sample: int, n_try: int):
     sampling_params.top_p = 0.9
     sampling_params.max_tokens = 1024
 
-    data = load_data(test_name, seed=42, n_sample=n_sample)
+    data = load_data(test_name)
     input_conversations = make_conversation_list(data)
 
     outputs = llm.chat(input_conversations, sampling_params, use_tqdm=True)
@@ -108,8 +106,7 @@ def main(test_name: str, n_sample: int, n_try: int):
 
 if __name__ == "__main__":
     # inference config
-    n_sample = -1
     n_try = 128
     test_name = "restaurant"
 
-    main(test_name, n_sample, n_try)
+    main(test_name, n_try)

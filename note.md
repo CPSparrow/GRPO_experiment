@@ -39,6 +39,13 @@ source .venv/bin/activate
 pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
+使用 unsloth 训练的时候需要设置 huggingface 的镜像源：
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False,roundup_power2_divisions:[32:256,64:128,256:64,>:32]"
+```
+
+
 基于 vllm 的文档，使用以下命令安装：
 
 > flash infer似乎装不上，所以暂时不使用
@@ -106,3 +113,4 @@ curl --request POST \
   "stream": false
 }'
 ```
+
