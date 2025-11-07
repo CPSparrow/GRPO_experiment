@@ -1,12 +1,17 @@
-import unsloth
+import os
+
 import numpy as np
+import swanlab
 import torch
+import unsloth
 from datasets import load_from_disk
+from swanlab.integration.transformers import SwanLabCallback
+from swanlab.plugin.notification import EmailCallback
 from trl import GRPOConfig, GRPOTrainer
 from unsloth import FastLanguageModel
 from vllm import SamplingParams
 
-import os
+torch._dynamo.config.cache_size_limit = 256
 
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 
@@ -29,7 +34,7 @@ def reward_answer(completions, answer, **kwargs):
     return scores
 
 
-max_seq_length = 2048  # Can increase for longer reasoning traces
+max_seq_length = 1024  # Can increase for longer reasoning traces
 lora_rank = 32  # Larger rank = smarter, but slower
 system_prompt = "Analyze the sentiment of a certain object from a given text. Reason carefully before giving your response. Your response should end with a single word: positive, negative, or neutral, on a new line."
 
@@ -41,6 +46,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     max_lora_rank=lora_rank,
     gpu_memory_utilization=0.95,  # Reduce if out of memory
 )
+
 # TODO config here can be optimized
 model = FastLanguageModel.get_peft_model(
     model,
@@ -110,6 +116,7 @@ vllm_sampling_params = SamplingParams(
     include_stop_str_in_output=True,
 )
 
+
 training_args = GRPOConfig(
     # vllm configs
     vllm_sampling_params=vllm_sampling_params,
@@ -133,7 +140,6 @@ training_args = GRPOConfig(
     num_train_epochs=1,  # Set to 1 for a full training run
     # max_steps=200,
     save_steps=50,
-    report_to="none",  # Can use Weights & Biases # TODO what's this?
     output_dir="outputs",
     # For optional training + evaluation
     fp16_full_eval=True,
@@ -146,6 +152,34 @@ training_args = GRPOConfig(
 # For optional training + evaluation
 splited_dataset = dataset.train_test_split(test_size=0.1)
 
+
+# 初始化邮件通知插件
+email_callback = EmailCallback(
+    sender_email="1186977762@qq.com",
+    receiver_email="1186977762@qq.com",
+    password="wzubregistphgdfc",
+    smtp_server="smtp.qq.com",
+    port=587,
+    language="zh",
+)
+# 注册邮件回调
+swanlab.register_callbacks([email_callback])
+
+# 初始化SwanLab回调
+swanlab_callback = SwanLabCallback(
+    resume=True,
+    project="RL for Sentiment Analysis",
+    experiment_name="Qwen3-4B-Instruct-GRPO",
+    description="测试Qwen3-4B-Instruct-GRPO模型在情感分析任务上的性能",
+    config={
+        "lora_rank": lora_rank,
+        "max_seq_length": max_seq_length,
+        "n_epoch": training_args.num_train_epochs,
+        "learning_rate": training_args.learning_rate,
+        "train_set_size": splited_dataset["train"].shape[0],
+    },
+)
+
 trainer = GRPOTrainer(
     model=model,
     processing_class=tokenizer,
@@ -153,9 +187,12 @@ trainer = GRPOTrainer(
         reward_answer,
     ],
     args=training_args,
+    callbacks=[swanlab_callback],
     # train_dataset = dataset,
     # For optional training + evaluation:
     train_dataset=splited_dataset["train"],
     eval_dataset=splited_dataset["test"],
+    # 从上次中断处恢复训练
+    resume_from_checkpoint=True,
 )
 trainer.train()

@@ -6,19 +6,25 @@ from datasets import load_from_disk
 
 
 def main():
-    n_tries = 128
-    
-    eval_list = ["restaurant_test","laptop_test"]
+    eval_list = [
+        # "restaurant_test",
+        # "laptop_test",
+        "restaurant_test_114",
+    ]
 
     _, axs = plt.subplots(1, 2, figsize=(10, 6))
     for eval_name in eval_list:
-        ground_truth: pd.DataFrame = load_from_disk(f"./data/{eval_name}").to_pandas()  # type: ignore
+        ground_truth: pd.DataFrame = load_from_disk(
+            f"./data/{eval_name[:-4]}"
+        ).to_pandas()  # type: ignore
         output_data = pd.read_parquet(f"./eval/{eval_name}.parquet")
 
         print(f"{ground_truth.shape = }, 列{ground_truth.columns.tolist()}")
         print(f"{output_data.shape = }, 列{output_data.columns.tolist()}")
 
-        assert ground_truth.shape[0] == output_data.shape[0] // n_tries, "数据量不匹配"
+        n_tries = output_data.shape[0] // ground_truth.shape[0]
+
+        assert ground_truth.shape[0] * n_tries == output_data.shape[0], "数据量不匹配"
 
         outputs = output_data["output"].str.split().str[-1]
         true_labels = ground_truth.loc[output_data["index"], "sentiment"].values
@@ -29,7 +35,9 @@ def main():
         num_problems = len(c_i_series)
 
         print("\n=== 题目错误率分布 ===")
-        error_rates = c_i_series / n_tries  # 每个题目的错误率（(总样本-正确样本)/总样本）
+        error_rates = (
+            c_i_series / n_tries
+        )  # 每个题目的错误率（(总样本-正确样本)/总样本）
         bins = [i / 10 for i in range(11)]  # 区间：0.0-0.1, 0.1-0.2,...,0.9-1.0
         error_bins = pd.cut(error_rates, bins=bins, right=False)  # 左闭右开区间
         error_dist = error_bins.value_counts().sort_index()  # 统计每个区间的题目数
@@ -39,7 +47,9 @@ def main():
             print(f"{interval =}, {count = }")
 
         # 绘制错误率直方图
-        axs[0].hist(error_rates, bins=bins, label=f"{eval_name}", alpha=0.6, density=True)
+        axs[0].hist(
+            error_rates, bins=bins, label=f"{eval_name}", alpha=0.6, density=True
+        )
         axs[0].set_xlabel("acc rate")
         axs[0].set_ylabel("count")
         axs[0].set_title("acc rate distribution")
@@ -75,9 +85,11 @@ def main():
         wrong_format = total - outputs.isin(["positive", "negative", "neutral"]).sum()
         correct = correct_per_row.sum()
 
-        print(f"正确样本数: {correct}, 格式错误样本数: {wrong_format}, 总样本数: {total}")
+        print(
+            f"正确样本数: {correct}, 格式错误样本数: {wrong_format}, 总样本数: {total}"
+        )
         print(f"样本准确率: {correct / total:.3f}")
-    
+
     plt.tight_layout()
     plt.show()
 
