@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -8,16 +9,32 @@ from datasets import load_from_disk
 def main():
     eval_list = [
         # "restaurant_test",
-        # "laptop_test",
-        "restaurant_test_114",
+        # "restaurant_train",
+        "laptop_test",
+        "laptop_train",
     ]
 
     _, axs = plt.subplots(1, 2, figsize=(10, 6))
     for eval_name in eval_list:
-        ground_truth: pd.DataFrame = load_from_disk(
-            f"./data/{eval_name[:-4]}"
-        ).to_pandas()  # type: ignore
-        output_data = pd.read_parquet(f"./eval/{eval_name}.parquet")
+        data_dir = Path("./data")
+        test_dirs = [
+            d.name
+            for d in data_dir.iterdir()
+            if d.is_dir()  # and "_test" in d.name
+        ]
+
+        # 查找匹配的基础测试目录名
+        matched_dir = None
+        for test_dir in test_dirs:
+            if eval_name.startswith(test_dir):
+                matched_dir = test_dir
+                break
+
+        if not matched_dir:
+            raise ValueError(f"无法为 {eval_name} 找到匹配的ground_truth目录")
+
+        ground_truth: pd.DataFrame = load_from_disk(data_dir / matched_dir).to_pandas()  # type: ignore
+        output_data = pd.read_parquet(str(Path("./eval") / f"{eval_name}.parquet"))
 
         print(f"{ground_truth.shape = }, 列{ground_truth.columns.tolist()}")
         print(f"{output_data.shape = }, 列{output_data.columns.tolist()}")
