@@ -106,7 +106,10 @@ def prepare_dataset(tokenizer, system_prompt, max_seq_length):
     tokenized = tokenized.map(lambda x: {"L": len(x["tokens"])})
 
     max_prompt_length = int(np.quantile(tokenized["L"], 0.9))  # type: ignore
+
+    print("=" * 50)
     print("Max Length = ", max_prompt_length)
+    print("=" * 50)
 
     dataset = dataset.select(np.where(np.array(tokenized["L"]) <= max_prompt_length)[0])  # type: ignore
     del tokenized
@@ -160,13 +163,13 @@ def setup_training_config(
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=max_prompt_length,
         max_completion_length=max_completion_length,
-        num_train_epochs=1,  # Set to 1 for a full training run
+        num_train_epochs=2,  # Set to 1 for a full training run
         # max_steps=200,
         save_steps=50,
         output_dir="outputs",
         # For optional training + evaluation
         fp16_full_eval=True,
-        per_device_eval_batch_size=128,
+        per_device_eval_batch_size=256,  # 尝试增加到一个很大的值来提高评估速度，因为之前观察到评估时 GPU 显存利用率很低
         eval_accumulation_steps=1,
         eval_strategy="steps",
         eval_steps=100,

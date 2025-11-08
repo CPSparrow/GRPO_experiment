@@ -1,4 +1,6 @@
 __pycache__/
 _models/
+.vscode/
+.ruff_cache/
 data/
 eval/

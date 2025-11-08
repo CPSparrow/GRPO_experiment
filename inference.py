@@ -17,6 +17,17 @@ lora_rank = 32  # Larger rank = smarter, but slower
 system_prompt = "Analyze the sentiment of a certain object from a given text. Reason carefully before giving your response. Your response should end with a single word: positive, negative, or neutral, on a new line."
 
 
+# 初始化邮件通知插件
+email_callback = EmailCallback(
+    sender_email="1186977762@qq.com",
+    receiver_email="1186977762@qq.com",
+    password="wzubregistphgdfc",
+    smtp_server="smtp.qq.com",
+    port=587,
+    language="zh",
+)
+
+
 def make_conversation_list(data: pd.DataFrame) -> list[list[dict]]:
     """将数据集转换为对话格式
 
@@ -142,19 +153,8 @@ def inference(
     return gather_outputs(data["id"], outputs)
 
 
-def main():
-    # 推理的设置：
-    # 要推理的数据集列表
-    target_dataset_list = [
-        # "restaurant_test",
-        "laptop_test",
-        # "restaurant_train",
-        "laptop_train",
-    ]
-
-    # 要使用的LoRA路径，None表示使用基础模型
-    # lora_path = None
-    lora_path = "./outputs/checkpoint-470"
+def main(target_dataset_list: list[str], lora_path: str | None = None):
+    """主函数, 对指定的数据集列表进行推理"""
 
     model, tokenizer = load_unsloth_model(
         "./models/Qwen3-4B-Instruct-2507",
@@ -177,25 +177,28 @@ def main():
 
 
 if __name__ == "__main__":
-    # 初始化邮件通知插件
-    email_callback = EmailCallback(
-        sender_email="1186977762@qq.com",
-        receiver_email="1186977762@qq.com",
-        password="wzubregistphgdfc",
-        smtp_server="smtp.qq.com",
-        port=587,
-        language="zh",
-    )
+    # 推理的设置：
+    # 要推理的数据集列表
+    target_dataset_list = [
+        # "restaurant_test",
+        "laptop_test",
+        # "restaurant_train",
+        "laptop_train",
+    ]
+
+    # 要使用的LoRA路径，None表示使用基础模型
+    # lora_path = None
+    lora_path = "./outputs/checkpoint-470"
 
     try:
-        main()
+        main(target_dataset_list, lora_path)
         email_callback.send_email(
-            subject="Inference Finished",
-            body="All inference tasks have been completed.",
+            subject="Swanlab | Inference Finished",
+            body=f"All inference tasks on {target_dataset_list} have been completed with LoRA {lora_path.split('/')[-1] if lora_path is not None else "'base'"}.",
         )
     except Exception as e:
         # 发送异常信息
         email_callback.send_email(
-            subject="Inference Failed",
+            subject="Swanlab | Inference Failed",
             body=f"An error occurred: {str(e)}\n\n{traceback.format_exc()}",
         )
