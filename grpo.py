@@ -112,7 +112,7 @@ def prepare_dataset(
         }
     )
 
-    # 原示例中会过滤样本大小，但是sentiment数据集的量都很小，就不处理了
+    # TODO 过滤少部分长样本有助于提高训练
     tokenized = train_set.map(
         lambda x: {
             "tokens": tokenizer.apply_chat_template(

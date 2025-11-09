@@ -228,7 +228,9 @@ if __name__ == "__main__":
 
     # 对比模型在checkpoint的数据
     checkpoint_list = [
-        "./eval/restaurant_test_checkpoint-200_20251108_234158.parquet",
-        "./eval/restaurant_test_checkpoint-470_20251108_231708.parquet",
+        "./eval/restaurant_test_checkpoint-30_20251109_214809.parquet",
+        "./eval/restaurant_test_checkpoint-60_20251109_215334.parquet",
+        "./eval/restaurant_test_checkpoint-90_20251109_215853.parquet",
+        "./eval/restaurant_test_checkpoint-111_20251109_214158.parquet",
     ]
     main(base_list + checkpoint_list)
