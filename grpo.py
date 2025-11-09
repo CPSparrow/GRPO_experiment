@@ -1,5 +1,3 @@
-"""现在的GRPO训练脚本，基本是纯粹的执行脚本，训练的设置都在config.py中进行调整"""
-
 import os
 
 import numpy as np
@@ -13,7 +11,7 @@ from trl import GRPOConfig, GRPOTrainer
 from unsloth import FastLanguageModel
 from vllm import SamplingParams
 
-torch._dynamo.config.cache_size_limit = 512
+torch._dynamo.config.cache_size_limit = 1024
 
 os.environ["UNSLOTH_VLLM_STANDBY"] = "1"
 
@@ -80,10 +78,14 @@ def load_and_prepare_model(max_seq_length, lora_rank):
 
 
 def prepare_dataset(
-    tokenizer, dataset_name: str, system_prompt: str, max_seq_length: int
+    tokenizer,
+    trainset_name: str,
+    validset_name: str,
+    system_prompt: str,
+    max_seq_length: int,
 ):
     """加载和预处理数据集"""
-    train_set = load_from_disk(f"./data/{dataset_name}_train")
+    train_set = load_from_disk(f"./data/{trainset_name}")
     train_set = train_set.map(
         lambda x: {
             "prompt": [
@@ -96,7 +98,7 @@ def prepare_dataset(
             "answer": x["sentiment"],
         }
     )
-    test_set = load_from_disk(f"./data/{dataset_name}_test")
+    test_set = load_from_disk(f"./data/{validset_name}")
     test_set = test_set.map(
         lambda x: {
             "prompt": [
@@ -161,29 +163,33 @@ def setup_training_config(
         vllm_mode="colocate",
         vllm_enable_sleep_mode=True,
         # training configs
+        beta=0.0,
+        epsilon=0.2,
+        epsilon_high=0.28,
         temperature=1.0,
         learning_rate=5e-6,
         weight_decay=0.001,
         warmup_ratio=0.1,
-        lr_scheduler_type="linear",
-        optim="adamw_8bit",  # TODO what to chose?
+        # TODO what to chose?
+        lr_scheduler_type="cosine",
+        optim="adamw_8bit",
         logging_dir="logs",
         logging_steps=2,
-        per_device_train_batch_size=32,
-        gradient_accumulation_steps=4,  # Increase to 4 for smoother training
-        num_generations=16,  # Decrease if out of memory
+        num_train_epochs=3,
+        per_device_train_batch_size=128,
+        gradient_accumulation_steps=1,  # Increase to 4 for smoother training
+        num_generations=8,  # Decrease if out of memory
         max_prompt_length=max_prompt_length,
         max_completion_length=max_completion_length,
-        num_train_epochs=3,
         # max_steps=200,  # 取消注释以使用步数而非轮次
-        save_steps=50,
+        save_steps=30,
         output_dir="outputs",
-        # For optional training + evaluation
-        fp16_full_eval=True,
-        per_device_eval_batch_size=256,  # 尝试增加到一个很大的值来提高评估速度，因为之前观察到评估时 GPU 显存利用率很低
-        eval_accumulation_steps=1,
-        eval_strategy="steps",
-        eval_steps=100,
+        # # For optional training + evaluation
+        # fp16_full_eval=True,
+        # per_device_eval_batch_size=256,  # 尝试增加到一个很大的值来提高评估速度，因为之前观察到评估时 GPU 显存利用率很低
+        # eval_accumulation_steps=1,
+        # eval_strategy="steps",
+        # eval_steps=50, # 没必要太小
     )
 
 
@@ -236,7 +242,7 @@ def train_model(
         args=training_args,
         callbacks=callbacks,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        # eval_dataset=eval_dataset, # 暂时不使用评估集，使用手动评估
         # 从上次中断处恢复训练
         resume_from_checkpoint=True,
     )
@@ -245,7 +251,7 @@ def train_model(
     return trainer
 
 
-def main():
+def main(trainset_name: str, validset_name: str):
     """主函数，协调各个步骤"""
     # 设置参数
     max_seq_length = 1024  # Can increase for longer reasoning traces
@@ -256,9 +262,10 @@ def main():
     model, tokenizer = load_and_prepare_model(max_seq_length, lora_rank)
 
     # 准备数据集
-    train_set, test_set, max_prompt_length, max_completion_length = prepare_dataset(
+    train_set, valid_set, max_prompt_length, max_completion_length = prepare_dataset(
         tokenizer=tokenizer,
-        dataset_name="laptop",
+        trainset_name=trainset_name,
+        validset_name=validset_name,
         system_prompt=system_prompt,
         max_seq_length=max_seq_length,
     )
@@ -284,7 +291,7 @@ def main():
         training_args,
         [swanlab_callback],
         train_set,
-        test_set,
+        valid_set,
     )
 
     # 保存模型
@@ -292,4 +299,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    trainset_name = "laptop_train_hard"
+    validset_name = "laptop_test"
+    main(trainset_name, validset_name)

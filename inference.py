@@ -11,7 +11,6 @@ from vllm import SamplingParams
 torch._dynamo.config.cache_size_limit = 256
 
 # 以下设置应该与训练脚本中的设置相同
-# TODO 通过配置文件传递，从而保持训练和推理时的参数一致
 max_seq_length = 1024  # Can increase for longer reasoning traces
 lora_rank = 32  # Larger rank = smarter, but slower
 system_prompt = "Analyze the sentiment of a certain object from a given text. Reason carefully before giving your response. Your response should end with a single word: positive, negative, or neutral, on a new line."

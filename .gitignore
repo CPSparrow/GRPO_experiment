@@ -4,3 +4,5 @@ _models/
 .ruff_cache/
 data/
 eval/
+test.ipynb
+run.log
