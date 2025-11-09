@@ -1,50 +1,45 @@
-## 1. 环境配置
+# 实用命令
 
-简要画出目录结构：
+## 设置代码运行的环境变量
 
-```bash
-/wxr
-|__envs
-|   |__unsloth  # conda环境
-|__code
-    |__.venv  # python虚拟环境,由uv管理
-    |__models
-    |__data_dir_1
-    |__data_dir_2
-    |__code_dir_1
-    |__code_dir_2
-```
-
-**说明：**
-
-流程是先用conda创建基础环境，然后在该环境下安装pipx(用于安装uv)。具体的py环境通过uv来管理。
-
-手动激活uv的方式是输入以下命令：
-
-> 目前的安装不会加入到PATH中，而且我们也不应该这样做。
+1. 激活环境
 
 ```bash
-export PATH=/root/.local/bin:$PATH
-```
-
-创建并激活 uv 环境：
-
-```bash
-uv venv --python 3.12 --seed
 source .venv/bin/activate
 ```
 
-默认清华源：
-```bash
-pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-```
+2. 运行代码
 
-使用 unsloth 训练的时候需要设置 huggingface 的镜像源：
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False,roundup_power2_divisions:[32:256,64:128,256:64,>:32]"
 ```
 
+3. 清华源
+
+```bash
+--index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+```
+
+4. 监控GPU占用
+
+```bash
+watch -n 1 -d nvidia-smi
+```
+
+# 依赖安装和环境配置
+
+创建并激活 uv 环境：
+
+```bash
+uv venv --python 3.12 --seed
+```
+
+默认清华源：
+
+```bash
+pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+```
 
 基于 vllm 的文档，使用以下命令安装：
 
@@ -70,6 +65,8 @@ print("CUDA版本:", torch.version.cuda)
 ```bash
 modelscope download --model Qwen/Qwen3-4B-Instruct-2507 --local_dir ./models/Qwen3-4B-Instruct-2507
 ```
+
+# 环境测试
 
 运行：
 
@@ -113,4 +110,16 @@ curl --request POST \
   "stream": false
 }'
 ```
+## 原先对于学校服务器环境的笔记：
 
+**说明：**
+
+流程是先用conda创建基础环境，然后在该环境下安装pipx(用于安装uv)。具体的py环境通过uv来管理。
+
+手动激活uv的方式是输入以下命令：
+
+> 目前的安装不会加入到PATH中，而且我们也不应该这样做。
+
+```bash
+export PATH=/root/.local/bin:$PATH
+```

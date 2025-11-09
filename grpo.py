@@ -1,3 +1,5 @@
+"""现在的GRPO训练脚本，基本是纯粹的执行脚本，训练的设置都在config.py中进行调整"""
+
 import os
 
 import numpy as np
@@ -52,14 +54,14 @@ def load_and_prepare_model(max_seq_length, lora_rank):
         load_in_4bit=False,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=lora_rank,
-        gpu_memory_utilization=0.95,  # Reduce if out of memory
+        gpu_memory_utilization=0.95,
     )
 
     # 配置LoRA
     # TODO 了解lora的超参数，考察优化的方向
     model = FastLanguageModel.get_peft_model(
         model,
-        r=lora_rank,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+        r=lora_rank,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -77,10 +79,25 @@ def load_and_prepare_model(max_seq_length, lora_rank):
     return model, tokenizer
 
 
-def prepare_dataset(tokenizer, system_prompt, max_seq_length):
+def prepare_dataset(
+    tokenizer, dataset_name: str, system_prompt: str, max_seq_length: int
+):
     """加载和预处理数据集"""
-    dataset = load_from_disk("./data/laptop_train")
-    dataset = dataset.map(
+    train_set = load_from_disk(f"./data/{dataset_name}_train")
+    train_set = train_set.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f'sentence:"{x["sentence"]}", object:"{x["object"]}"',
+                },
+            ],
+            "answer": x["sentiment"],
+        }
+    )
+    test_set = load_from_disk(f"./data/{dataset_name}_test")
+    test_set = test_set.map(
         lambda x: {
             "prompt": [
                 {"role": "system", "content": system_prompt},
@@ -93,8 +110,8 @@ def prepare_dataset(tokenizer, system_prompt, max_seq_length):
         }
     )
 
-    # 过滤样本大小
-    tokenized = dataset.map(
+    # 原示例中会过滤样本大小，但是sentiment数据集的量都很小，就不处理了
+    tokenized = train_set.map(
         lambda x: {
             "tokens": tokenizer.apply_chat_template(
                 x["prompt"], add_generation_prompt=True, tokenize=True
@@ -102,17 +119,14 @@ def prepare_dataset(tokenizer, system_prompt, max_seq_length):
         },
         batched=True,
     )
-    print(tokenizer.decode(tokenized[0]["tokens"]))
     tokenized = tokenized.map(lambda x: {"L": len(x["tokens"])})
 
-    max_prompt_length = int(np.quantile(tokenized["L"], 0.9))  # type: ignore
+    max_prompt_length = int(np.array(tokenized["L"]).max())
+    del tokenized
 
     print("=" * 50)
     print("Max Length = ", max_prompt_length)
     print("=" * 50)
-
-    dataset = dataset.select(np.where(np.array(tokenized["L"]) <= max_prompt_length)[0])  # type: ignore
-    del tokenized
 
     max_prompt_length = max_prompt_length + 1  # + 1 just in case!
     max_completion_length = max_seq_length - max_prompt_length
@@ -121,10 +135,7 @@ def prepare_dataset(tokenizer, system_prompt, max_seq_length):
     print(f"{max_prompt_length = }, {max_completion_length = }")
     print("=" * 50)
 
-    # 分割训练集和测试集
-    splited_dataset = dataset.train_test_split(test_size=0.1)
-
-    return splited_dataset, max_prompt_length, max_completion_length
+    return train_set, test_set, max_prompt_length, max_completion_length
 
 
 def setup_vllm_sampling_params(tokenizer):
@@ -163,8 +174,8 @@ def setup_training_config(
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=max_prompt_length,
         max_completion_length=max_completion_length,
-        num_train_epochs=2,  # Set to 1 for a full training run
-        # max_steps=200,
+        num_train_epochs=3,
+        # max_steps=200,  # 取消注释以使用步数而非轮次
         save_steps=50,
         output_dir="outputs",
         # For optional training + evaluation
@@ -245,8 +256,11 @@ def main():
     model, tokenizer = load_and_prepare_model(max_seq_length, lora_rank)
 
     # 准备数据集
-    splited_dataset, max_prompt_length, max_completion_length = prepare_dataset(
-        tokenizer, system_prompt, max_seq_length
+    train_set, test_set, max_prompt_length, max_completion_length = prepare_dataset(
+        tokenizer=tokenizer,
+        dataset_name="laptop",
+        system_prompt=system_prompt,
+        max_seq_length=max_seq_length,
     )
 
     # 设置vLLM采样参数
@@ -259,7 +273,7 @@ def main():
 
     # 设置回调函数
     swanlab_callback = setup_callbacks(
-        lora_rank, max_seq_length, training_args, splited_dataset["train"].shape[0]
+        lora_rank, max_seq_length, training_args, train_set.shape
     )
 
     # 训练模型
@@ -269,8 +283,8 @@ def main():
         [reward_answer],
         training_args,
         [swanlab_callback],
-        splited_dataset["train"],
-        splited_dataset["test"],
+        train_set,
+        test_set,
     )
 
     # 保存模型

@@ -94,22 +94,24 @@ def calculate_pass_k(c_i_series: pd.Series, n_tries: int) -> list[float]:
     return pass_k_list
 
 
-def plot_accuracy_distribution(ax, error_rates: pd.Series, simplified_label: str, position=0, total_bars=1):
+def plot_accuracy_distribution(
+    ax, error_rates: pd.Series, simplified_label: str, position=0, total_bars=1
+):
     """绘制准确率分布图，支持分组显示"""
     bins = [i / 10 for i in range(11)]
-    
+
     # 计算每个柱状图的位置偏移，实现分组效果
     bin_width = bins[1] - bins[0]
     bar_width = bin_width * 0.8 / total_bars  # 总宽度占bin宽度的80%，按bar数量分配
     offset = (position - (total_bars - 1) / 2) * bar_width
-    
+
     # 计算直方图数据
     hist_values, bin_edges = np.histogram(error_rates, bins=bins)
-    
+
     # 绘制分组柱状图
-    x_positions = bin_edges[:-1] + offset + bin_width/2
+    x_positions = bin_edges[:-1] + offset + bin_width / 2
     ax.bar(x_positions, hist_values, width=bar_width, label=simplified_label, alpha=0.7)
-    
+
     ax.set_xlabel("acc rate")
     ax.set_ylabel("count")
     ax.set_title("acc rate distribution")
@@ -177,29 +179,31 @@ def main(eval_list: list[str]):
     for eval_name in eval_list:
         # 加载数据
         ground_truth, output_data, n_tries = load_data(eval_name)
-        
+
         # 计算指标
         outputs, correct_per_row, c_i_series, _ = calculate_metrics(
             output_data, ground_truth
         )
-        
+
         error_rates = c_i_series / n_tries
         simplified_label = simplify_label(eval_name)
         pass_k_list = calculate_pass_k(c_i_series, n_tries)
-        
-        all_data.append((simplified_label, error_rates, pass_k_list, outputs, correct_per_row))
-        
+
+        all_data.append(
+            (simplified_label, error_rates, pass_k_list, outputs, correct_per_row)
+        )
+
         # 更新结果 DataFrame
         results_df = update_results_dataframe(
             results_df, simplified_label, outputs, correct_per_row
         )
-    
+
     # 绘制所有图表
     total_bars = len(all_data)
     for i, (simplified_label, error_rates, pass_k_list, _, _) in enumerate(all_data):
         # 绘制分组柱状图
         plot_accuracy_distribution(axs[0], error_rates, simplified_label, i, total_bars)
-        
+
         # 绘制 pass@k 曲线
         plot_pass_k_curve(axs[1], pass_k_list, simplified_label)
 
@@ -216,17 +220,15 @@ def main(eval_list: list[str]):
 if __name__ == "__main__":
     # 作为基线的数据，用于对比
     base_list = [
-        # "./eval/restaurant_test.parquet",
+        "./eval/restaurant_test.parquet",
         # "./eval/restaurant_train.parquet",
-        "./eval/laptop_test.parquet",
+        # "./eval/laptop_test.parquet",
         # "./eval/laptop_train.parquet",
     ]
-    
+
     # 对比模型在checkpoint的数据
     checkpoint_list = [
-        "./eval/laptop_test_checkpoint-200_20251107_223953.parquet",
-        # "./eval/laptop_train_checkpoint-200_20251107_224830.parquet",
-        "./eval/laptop_test_checkpoint-470_20251107_214508.parquet",
-        # "./eval/laptop_train_checkpoint-470_20251107_220339.parquet"
+        "./eval/restaurant_test_checkpoint-200_20251108_234158.parquet",
+        "./eval/restaurant_test_checkpoint-470_20251108_231708.parquet",
     ]
-    main(base_list+checkpoint_list)
+    main(base_list + checkpoint_list)

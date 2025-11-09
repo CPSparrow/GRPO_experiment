@@ -56,6 +56,16 @@ def make_conversation_list(data: pd.DataFrame) -> list[list[dict]]:
 
 
 def gather_outputs(index_list: pd.Series, output_list: list):
+    """
+    从vllm的输出中提取生成结果
+
+    Args:
+        index_list (pd.Series): 输入数据的索引列
+        output_list (list): vllm的输出列表
+
+    Returns:
+        pd.DataFrame: 包含索引、生成文本和文本长度的DataFrame
+    """
     data = list()
     for index, output in zip(index_list, output_list):
         for item in output.outputs:
@@ -65,13 +75,11 @@ def gather_outputs(index_list: pd.Series, output_list: list):
     return pd.DataFrame(data)
 
 
-def load_unsloth_model(model_path, lora_rank, enable_lora=True):
+def load_unsloth_model(model_path):
     """加载unsloth模型
 
     Args:
         model_path: 模型路径
-        lora_rank: LoRA rank
-        enable_lora: 是否启用LoRA
 
     Returns:
         模型和分词器
@@ -82,7 +90,7 @@ def load_unsloth_model(model_path, lora_rank, enable_lora=True):
         load_in_4bit=False,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=lora_rank,
-        gpu_memory_utilization=0.95,  # Reduce if out of memory
+        gpu_memory_utilization=0.95,
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -106,19 +114,20 @@ def load_unsloth_model(model_path, lora_rank, enable_lora=True):
 
 
 def inference(
-    model, tokenizer, test_name: str, n_try: int, lora_path: str | None = None
+    model, tokenizer, test_name: str, lora_path: str | None = None
 ) -> pd.DataFrame:
     # 设置采样参数
     sampling_params = SamplingParams(
-        n=n_try,
         temperature=1.0,
         max_tokens=512,
     )
     if "test" in test_name:
         # 假如是在测试集上生成，则基本使用推荐/默认参数
+        sampling_params.n = 128
         sampling_params.top_p = 0.9
     else:
         # 假如是在训练集上生成，则将生成参数调整到和GRPO的参数相同
+        sampling_params.n = 16
         sampling_params.top_p = 1.0
         sampling_params.min_p = 0.1
         sampling_params.top_k = -1
@@ -127,7 +136,7 @@ def inference(
     input_conversations = make_conversation_list(data)
 
     print("=" * 70)
-    print(f"正在生成：{test_name}：{data.shape = } with {n_try = }")
+    print(f"正在生成：{test_name}：{data.shape = } with n_try ={sampling_params.n}")
     print("=" * 70)
 
     # 为每个对话应用chat template并进行推理
@@ -156,23 +165,23 @@ def inference(
 def main(target_dataset_list: list[str], lora_path: str | None = None):
     """主函数, 对指定的数据集列表进行推理"""
 
+    # 生成任务时间戳，确保一次任务中的所有文件使用相同的时间戳
+    task_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    identifier = lora_path if lora_path is not None else "base"
+    identifier_name = identifier.split("/")[-1]
+
     model, tokenizer = load_unsloth_model(
         "./models/Qwen3-4B-Instruct-2507",
-        lora_rank,
-        enable_lora=True if lora_path is not None else False,
     )
 
     # 对每个数据集调用inference函数，复用同一个模型实例
     for dataset_name in target_dataset_list:
-        n_try = 128 if "test" in dataset_name else 32
-        output_data = inference(model, tokenizer, dataset_name, n_try, lora_path)
+        output_data = inference(model, tokenizer, dataset_name, lora_path)
 
         # 使用与 eval_result.py 中一致的输出路径
-        # 添加日期时间戳到输出文件名
-        identifier = lora_path if lora_path is not None else "base"
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 使用任务开始时生成的时间戳
         output_data.to_parquet(
-            f"./eval/{dataset_name}_{identifier.split('/')[-1]}_{current_time}.parquet"
+            f"./eval/{dataset_name}_{identifier_name}_{task_timestamp}.parquet"
         )
 
 
@@ -194,7 +203,7 @@ if __name__ == "__main__":
         main(target_dataset_list, lora_path)
         email_callback.send_email(
             subject="Swanlab | Inference Finished",
-            body=f"All inference tasks on {target_dataset_list} have been completed with LoRA {lora_path.split('/')[-1] if lora_path is not None else "'base'"}.",
+            body=f"All inference tasks on {target_dataset_list} have been completed with LoRA {lora_path.split('/')[-1] if lora_path is not None else 'base'}.",
         )
     except Exception as e:
         # 发送异常信息
