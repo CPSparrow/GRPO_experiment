@@ -1,27 +1,29 @@
 import math
 from pathlib import Path
-import numpy as np
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from datasets import load_from_disk
+from sklearn.metrics import f1_score
 
 
 def simplify_label(eval_name):
-    """将文件名简化为更直观的label格式，利用文件命名的规范性进行简化提取"""
-    # 获取文件名（去掉路径和扩展名）
+    """
+    将文件名简化为更直观的label格式
+
+    我们认为文件名的格式为：
+    /some_path/dataset_{train|test}[_checkpoint-number_...].parquet
+    """
+    # 去掉路径和扩展名
     file_name = eval_name.split("/")[-1].split(".")[0]
 
-    # 基于规范的文件名格式进行简化处理
-    # 标准格式：dataset_type_{train|test}[_checkpoint-number_...]
-    parts = file_name.split("_")
-
     # 提取数据集类型和用途（通常是前两部分）
-    dataset_type = parts[0]
-    data_purpose = parts[1] if len(parts) >= 2 else ""
+    parts = file_name.split("_")
+    dataset_type = parts[0]  # "laptop" or "restaurant"
+    data_purpose = parts[1]  # "train" or "test"
 
-    # 判断是否是checkpoint文件
-    if len(parts) >= 3 and parts[2].startswith("checkpoint"):
+    if len(parts) > 2 and parts[2].startswith("checkpoint"):
         # 提取checkpoint数字
         checkpoint_part = parts[2]
         checkpoint_num = (
@@ -31,7 +33,6 @@ def simplify_label(eval_name):
         )
         return f"{dataset_type}_{data_purpose}_{checkpoint_num}"
     else:
-        # 基础数据集
         return f"{dataset_type}_{data_purpose}_base"
 
 
@@ -63,17 +64,26 @@ def load_data(eval_name: str) -> tuple[pd.DataFrame, pd.DataFrame, int]:
 
 def calculate_metrics(
     output_data: pd.DataFrame, ground_truth: pd.DataFrame
-) -> tuple[pd.Series, pd.Series, pd.Series, int]:
-    """计算模型预测的关键指标"""
+) -> tuple[pd.Series, pd.Series, pd.Series, int, pd.Series]:
+    """
+    计算模型预测的关键指标
+    
+    :param output_data: 模型输出数据，包含 "index" 和 "output" 列
+    :param ground_truth: 真实标签数据，包含 "index" 和 "sentiment" 列
+    :return: 包含模型预测结果、每行是否正确、每个题目正确样本数、题目总数、是否隐式情感的Series
+    """
     outputs = output_data["output"].str.split().str[-1]
     true_labels = ground_truth.loc[output_data["index"], "sentiment"].values
+    is_implicit: pd.Series = ground_truth.loc[
+        output_data["index"], "is implicit"
+    ].values  # type: ignore
     correct_per_row = outputs == true_labels  # 每行是否预测正确
 
     # 计算每个题目的正确样本数
     c_i_series = correct_per_row.groupby(output_data["index"]).sum()
     num_problems = len(c_i_series)
 
-    return outputs, correct_per_row, c_i_series, num_problems
+    return outputs, correct_per_row, c_i_series, num_problems, is_implicit
 
 
 def calculate_pass_k(c_i_series: pd.Series, n_tries: int) -> list[float]:
@@ -130,25 +140,64 @@ def plot_pass_k_curve(ax, pass_k_list: list[float], simplified_label: str):
     ax.grid(True)
 
 
+def calculate_f1_and_accuracy(
+    predictions, true_labels, mask=None, filter_invalid=False
+):
+    """计算F1分数和准确率，可以选择应用掩码过滤特定样本"""
+    if mask is not None:
+        # 应用掩码，即统计 ISA 样本的 F1 和 Acc
+        predictions = predictions[mask]
+        true_labels = true_labels[mask]
+
+        if len(predictions) == 0:
+            return 0.0, 0.0
+
+    if filter_invalid:
+        valid_mask = predictions.isin(["positive", "negative", "neutral"])
+        valid_predictions = predictions[valid_mask]
+        valid_true_labels = true_labels[valid_mask]
+
+        if len(valid_predictions) == 0:
+            return 0.0, 0.0
+
+        f1 = f1_score(valid_true_labels, valid_predictions, average="macro")
+        accuracy = (valid_predictions == valid_true_labels).mean()
+
+    else:
+        f1 = f1_score(true_labels, predictions, average="macro")
+        accuracy = (predictions == true_labels).mean()
+
+    return f1, accuracy
+
+
 def update_results_dataframe(
     results_df: pd.DataFrame,
     simplified_label: str,
     outputs: pd.Series,
     correct_per_row: pd.Series,
+    ground_truth: pd.DataFrame,
+    output_data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """更新结果 DataFrame"""
+    """更新结果 DataFrame，包含ISA和All的F1和Acc指标"""
+    true_labels = ground_truth.loc[output_data["index"], "sentiment"].values
+    is_implicit = ground_truth.loc[output_data["index"], "is implicit"].values == "True"
+
     total = len(outputs)
     wrong_format = total - outputs.isin(["positive", "negative", "neutral"]).sum()
-    correct = correct_per_row.sum()
-    accuracy = correct / total
+
+    all_f1, all_acc = calculate_f1_and_accuracy(outputs, true_labels)
+    isa_f1, isa_acc = calculate_f1_and_accuracy(outputs, true_labels, is_implicit)
 
     # 将结果添加到 DataFrame
     results_df.loc[len(results_df)] = [
         simplified_label,
-        correct,
+        correct_per_row.sum(),
         wrong_format,
         total,
-        accuracy,
+        isa_f1,
+        isa_acc,
+        all_f1,
+        all_acc,
     ]
 
     return results_df
@@ -158,30 +207,42 @@ def print_results(results_df: pd.DataFrame):
     """打印评估结果汇总"""
     print("\n评估结果汇总：")
     results_df_display = results_df.copy()
-    results_df_display["准确率"] = results_df_display["准确率"].apply(
-        lambda x: f"{x:.3f}"
-    )
-    print(results_df_display)
+
+    print("       数据集           ISA_F1  ISA_Acc All_F1  All_Acc")
+    print("=" * 55)
+    for _, row in results_df_display.iterrows():
+        print(
+            f"{row['数据集']:<22}: "
+            f"{row['ISA_F1']:.4f}  "
+            f"{row['ISA_Acc']:.4f}  "
+            f"{row['All_F1']:.4f}  "
+            f"{row['All_Acc']:.4f}"
+        )
 
 
 def main(eval_list: list[str]):
     """主函数，协调各个子函数完成评估任务"""
-    # 创建 DataFrame 用于存储结果指标
     results_df = pd.DataFrame(
-        columns=["数据集", "正确样本数", "格式错误样本数", "总样本数", "准确率"]
+        columns=[
+            "数据集",
+            "正确样本数",
+            "格式错误样本数",
+            "总样本数",
+            "ISA_F1",
+            "ISA_Acc",
+            "All_F1",
+            "All_Acc",
+        ]
     )
 
     # 初始化绘图
     _, axs = plt.subplots(1, 2, figsize=(12, 6))
 
-    # 预先加载所有数据，以便进行分组绘制
     all_data = []
     for eval_name in eval_list:
-        # 加载数据
         ground_truth, output_data, n_tries = load_data(eval_name)
 
-        # 计算指标
-        outputs, correct_per_row, c_i_series, _ = calculate_metrics(
+        outputs, correct_per_row, c_i_series, _, _ = calculate_metrics(
             output_data, ground_truth
         )
 
@@ -193,9 +254,14 @@ def main(eval_list: list[str]):
             (simplified_label, error_rates, pass_k_list, outputs, correct_per_row)
         )
 
-        # 更新结果 DataFrame
+        # 更新结果 DataFrame，传入ground_truth和output_data以计算新指标
         results_df = update_results_dataframe(
-            results_df, simplified_label, outputs, correct_per_row
+            results_df,
+            simplified_label,
+            outputs,
+            correct_per_row,
+            ground_truth,
+            output_data,
         )
 
     # 绘制所有图表
@@ -209,28 +275,36 @@ def main(eval_list: list[str]):
 
     # 打印结果汇总
     print_results(results_df)
+
+    # 保存结果到CSV文件
+    # 确保results目录存在
+    Path("./results").mkdir(exist_ok=True)
     results_df.to_csv("./results/results.csv", index=False)
 
     # 显示图表
     plt.tight_layout()
     plt.savefig("./results/results.svg")
-    plt.show()
+    # plt.show()
 
 
 if __name__ == "__main__":
     # 作为基线的数据，用于对比
     base_list = [
-        "./eval/restaurant_test.parquet",
+        # "./eval/restaurant_test.parquet",
         # "./eval/restaurant_train.parquet",
-        # "./eval/laptop_test.parquet",
+        "./eval/laptop_test.parquet",
         # "./eval/laptop_train.parquet",
     ]
 
     # 对比模型在checkpoint的数据
     checkpoint_list = [
-        "./eval/restaurant_test_checkpoint-30_20251109_214809.parquet",
-        "./eval/restaurant_test_checkpoint-60_20251109_215334.parquet",
-        "./eval/restaurant_test_checkpoint-90_20251109_215853.parquet",
-        "./eval/restaurant_test_checkpoint-111_20251109_214158.parquet",
+        # "./eval/restaurant_test_checkpoint-30_20251109_214809.parquet",
+        # "./eval/restaurant_test_checkpoint-60_20251109_215334.parquet",
+        # "./eval/restaurant_test_checkpoint-90_20251109_215853.parquet",
+        # "./eval/restaurant_test_checkpoint-111_20251109_214158.parquet",
+        "./eval/laptop_test_checkpoint-30_20251109_214809.parquet",
+        "./eval/laptop_test_checkpoint-60_20251109_215334.parquet",
+        "./eval/laptop_test_checkpoint-90_20251109_215853.parquet",
+        "./eval/laptop_test_checkpoint-111_20251109_214158.parquet",
     ]
     main(base_list + checkpoint_list)
