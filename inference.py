@@ -122,7 +122,7 @@ def inference(
     )
     if "test" in test_name:
         # 假如是在测试集上生成，则基本使用推荐/默认参数
-        sampling_params.n = 128
+        sampling_params.n = 16
         sampling_params.top_p = 0.9
     else:
         # 假如是在训练集上生成，则将生成参数调整到和GRPO的参数相同
@@ -188,10 +188,10 @@ if __name__ == "__main__":
     # 推理的设置：
     # 要推理的数据集列表
     target_dataset_list = [
-        # "restaurant_test",
+        "restaurant_test",
         "laptop_test",
         # "restaurant_train",
-        "laptop_train",
+        # "laptop_train",
     ]
 
     # 要使用的LoRA路径，None表示使用基础模型

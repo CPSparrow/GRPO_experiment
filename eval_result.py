@@ -67,7 +67,7 @@ def calculate_metrics(
 ) -> tuple[pd.Series, pd.Series, pd.Series, int, pd.Series]:
     """
     计算模型预测的关键指标
-    
+
     :param output_data: 模型输出数据，包含 "index" 和 "output" 列
     :param ground_truth: 真实标签数据，包含 "index" 和 "sentiment" 列
     :return: 包含模型预测结果、每行是否正确、每个题目正确样本数、题目总数、是否隐式情感的Series
@@ -108,7 +108,8 @@ def plot_accuracy_distribution(
     ax, error_rates: pd.Series, simplified_label: str, position=0, total_bars=1
 ):
     """绘制准确率分布图，支持分组显示"""
-    bins = [i / 10 for i in range(11)]
+    n_bins = 20
+    bins = [i / n_bins for i in range(n_bins + 1)]
 
     # 计算每个柱状图的位置偏移，实现分组效果
     bin_width = bins[1] - bins[0]
@@ -290,7 +291,7 @@ def main(eval_list: list[str]):
 if __name__ == "__main__":
     # 作为基线的数据，用于对比
     base_list = [
-        # "./eval/restaurant_test.parquet",
+        "./eval/restaurant_test.parquet",
         # "./eval/restaurant_train.parquet",
         "./eval/laptop_test.parquet",
         # "./eval/laptop_train.parquet",
@@ -298,13 +299,22 @@ if __name__ == "__main__":
 
     # 对比模型在checkpoint的数据
     checkpoint_list = [
+        # grpo_1 laptop
+        # "./eval/grpo_1/laptop_test_checkpoint-200_20251107_223953.parquet",
+        # "./eval/grpo_1/laptop_test_checkpoint-400_20251107_221740.parquet",
+        # "./eval/grpo_1/laptop_test_checkpoint-470_20251107_214508.parquet",
+        # grpo_1 restaurant
+        # "./eval/grpo_1/restaurant_test_checkpoint-200_20251108_234158.parquet",
+        # "./eval/grpo_1/restaurant_test_checkpoint-470_20251108_231708.parquet",
+        # grpo_2 restaurant
         # "./eval/restaurant_test_checkpoint-30_20251109_214809.parquet",
         # "./eval/restaurant_test_checkpoint-60_20251109_215334.parquet",
         # "./eval/restaurant_test_checkpoint-90_20251109_215853.parquet",
         # "./eval/restaurant_test_checkpoint-111_20251109_214158.parquet",
-        "./eval/laptop_test_checkpoint-30_20251109_214809.parquet",
-        "./eval/laptop_test_checkpoint-60_20251109_215334.parquet",
-        "./eval/laptop_test_checkpoint-90_20251109_215853.parquet",
-        "./eval/laptop_test_checkpoint-111_20251109_214158.parquet",
+        # grpo_2 laptop
+        # "./eval/laptop_test_checkpoint-30_20251109_214809.parquet",
+        # "./eval/laptop_test_checkpoint-60_20251109_215334.parquet",
+        # "./eval/laptop_test_checkpoint-90_20251109_215853.parquet",
+        # "./eval/laptop_test_checkpoint-111_20251109_214158.parquet",
     ]
     main(base_list + checkpoint_list)
