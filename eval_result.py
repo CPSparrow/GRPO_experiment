@@ -137,10 +137,8 @@ def update_results_dataframe(
     return results_df
 
 
-def calculate_f1_and_accuracy(
-    predictions, true_labels, mask=None, filter_invalid=False
-):
-    """计算F1分数和准确率，可以选择应用掩码过滤特定样本"""
+def calculate_f1_and_accuracy(predictions, true_labels, mask=None):
+    """计算F1分数和准确率"""
     if mask is not None:
         # 应用掩码，即统计 ISA 样本的 F1 和 Acc
         predictions = predictions[mask]
@@ -149,20 +147,8 @@ def calculate_f1_and_accuracy(
         if len(predictions) == 0:
             return 0.0, 0.0
 
-    if filter_invalid:
-        valid_mask = predictions.isin(["positive", "negative", "neutral"])
-        valid_predictions = predictions[valid_mask]
-        valid_true_labels = true_labels[valid_mask]
-
-        if len(valid_predictions) == 0:
-            return 0.0, 0.0
-
-        f1 = f1_score(valid_true_labels, valid_predictions, average="macro")
-        accuracy = (valid_predictions == valid_true_labels).mean()
-
-    else:
-        f1 = f1_score(true_labels, predictions, average="macro")
-        accuracy = (predictions == true_labels).mean()
+    f1 = f1_score(true_labels, predictions, average="macro")
+    accuracy = (predictions == true_labels).mean()
 
     return f1, accuracy
 
@@ -295,7 +281,7 @@ def main(eval_list: list[str]):
 if __name__ == "__main__":
     # 作为基线的数据，用于对比
     base_list = [
-        "./eval/restaurant_test.parquet",
+        # "./eval/restaurant_test.parquet",
         # "./eval/restaurant_train.parquet",
         "./eval/laptop_test.parquet",
         # "./eval/laptop_train.parquet",
@@ -316,9 +302,9 @@ if __name__ == "__main__":
         # "./eval/restaurant_test_checkpoint-90_20251109_215853.parquet",
         # "./eval/restaurant_test_checkpoint-111_20251109_214158.parquet",
         # grpo_2 laptop
-        # "./eval/laptop_test_checkpoint-30_20251109_214809.parquet",
-        # "./eval/laptop_test_checkpoint-60_20251109_215334.parquet",
-        # "./eval/laptop_test_checkpoint-90_20251109_215853.parquet",
-        # "./eval/laptop_test_checkpoint-111_20251109_214158.parquet",
+        "./eval/laptop_test_checkpoint-30_20251109_214809.parquet",
+        "./eval/laptop_test_checkpoint-60_20251109_215334.parquet",
+        "./eval/laptop_test_checkpoint-90_20251109_215853.parquet",
+        "./eval/laptop_test_checkpoint-111_20251109_214158.parquet",
     ]
     main(base_list + checkpoint_list)
