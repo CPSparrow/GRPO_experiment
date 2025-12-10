@@ -71,7 +71,7 @@ def inference_context(
     # 筛选出正确率为1/8的题目
     difficulty_threshold = 1 / 8
     hard_problems = problem_correctness[
-        problem_correctness == difficulty_threshold
+        (problem_correctness <= difficulty_threshold+0.02) & (problem_correctness >= difficulty_threshold-0.02)
     ].index.tolist()
 
     # 如果符合条件的题目不足8个，考虑放宽条件
@@ -80,10 +80,8 @@ def inference_context(
         all_problems = problem_correctness[
             (problem_correctness > 0) & (problem_correctness < 0.6)
         ].index.tolist()
-        hard_problems = random.sample(all_problems, min(8, len(all_problems)))
-    else:
-        # 随机选择8个
-        hard_problems = random.sample(hard_problems, 8)
+    assert len(all_problems) >= 8, f"筛选出的题目数量不足8个"
+    hard_problems = random.sample(hard_problems, 8)
 
     # 生成反思记录作为上下文
     context_list = []
@@ -91,7 +89,6 @@ def inference_context(
         # 获取题目信息
         sentence = ground_truth.loc[idx, "sentence"]
         obj = ground_truth.loc[idx, "object"]
-        true_sentiment = ground_truth.loc[idx, "sentiment"]
 
         # 获取该题目的所有推理结果
         problem_outputs = output_data[output_data["index"] == idx]["output"].tolist()
@@ -160,7 +157,7 @@ def inference_context(
 
     for index, output_obj in enumerate(output_list):
         for item in output_obj.outputs:
-            context_list[index].append(item.text)
+            context_list[index].append({"role": "assistant", "content": item.text})
 
     context = [{"role": "system", "content": system_prompt}]
     for chat_log in context_list:

@@ -2,12 +2,16 @@
 
 目前需要补充背景知识，得到一个足够有价值的动机或者目标。而这首先需要了解ABSA
 
-## new idea
+## new idea 
+
+- [ ] 推进新想法的尝试
+
+### old idea
 
 - [ ] 增加其他base line，尤其是thor和直接回答的实现
 - [ ] 尝试 training free 的实现
 
-## code
+### code
 
 - [ ] 【case study】 对模型进行case study，分析模型潜在的问题。
 - [ ] 【case study】 优化样本筛选的逻辑
