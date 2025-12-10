@@ -6,6 +6,8 @@
   - [ ] &emsp;+reason:在任务说明中显式引导其进行推理
   - [ ] &emsp;+background:在任务说明中说明其任务背景,不显式引导推理
   - [ ] &emsp;+reason +background:在任务说明中引导其主动进行推理,同时说明其任务背景
-
+- [ ] 阅读seed coder,查看其如何实现验证和迭代的循环
+- [ ] 思考sentiment analysis任务应该如何构建verify 框架
+ 
 ### finished
 - [x] 11.13 编写方法设计文档

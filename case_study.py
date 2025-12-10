@@ -73,7 +73,9 @@ def main(target: str, seed: int | float):
     print(f"2. 正确率大于{low}小于等于{high}的样本个数: {low_accuracy_count}")
 
     low_accuracy_problems = [
-        idx for idx in correctness.index if low < correctness[idx] <= high # type: ignore
+        idx
+        for idx in correctness.index
+        if low < correctness[idx] <= high  # type: ignore
     ]
 
     selected_problem_idx = random.choice(low_accuracy_problems)
